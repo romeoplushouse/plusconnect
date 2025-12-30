@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>PlusConnect Dashboard</title>
+    <link rel="stylesheet" href="styles.css?v=1.0.0" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="logo-dot"></div>
+        <div>
+          <div class="title">PlusConnect</div>
+          <div class="subtitle">Status &amp; Logy</div>
+        </div>
+      </div>
+      <div class="hotel" id="hotel-id">Hotel: &lt;hotel_id&gt;</div>
+    </header>
+
+    <main>
+      <section class="grid">
+        <div class="card">
+          <div class="card-title">Zdraví služeb</div>
+          <div class="status-list">
+            <div class="status-item">
+              <span class="pill ok"></span>
+              <div>
+                <div class="label">Loxone</div>
+                <div class="meta" id="loxone-status">Neznámé</div>
+              </div>
+            </div>
+            <div class="status-item">
+              <span class="pill ok"></span>
+              <div>
+                <div class="label">Previo XML</div>
+                <div class="meta" id="previo-xml-status">Neznámé</div>
+              </div>
+            </div>
+            <div class="status-item">
+              <span class="pill ok"></span>
+              <div>
+                <div class="label">Previo REST</div>
+                <div class="meta" id="previo-rest-status">Neznámé</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Poslední synchronizace</div>
+          <div class="metric">
+            <div class="metric-value" id="last-sync">--</div>
+            <div class="metric-label">Čas posledního běhu</div>
+          </div>
+          <div class="metric-row">
+            <div>
+              <div class="metric-value" id="processed">--</div>
+              <div class="metric-label">Zpracované rezervace</div>
+            </div>
+            <div>
+              <div class="metric-value" id="changed">--</div>
+              <div class="metric-label">Změněno v Loxone</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card logs">
+          <div class="card-title">Poslední logy</div>
+          <div id="logs" class="log-list">
+            <div class="log-item">
+              <span class="pill warn"></span>
+              <div>
+                <div class="log-line">Zatím žádné záznamy</div>
+                <div class="meta">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

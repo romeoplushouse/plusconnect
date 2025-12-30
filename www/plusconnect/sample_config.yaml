@@ -1,0 +1,22 @@
+hotels:
+  - id: moravskygrunt
+    previo_hotel_id: "747998"
+    timezone: "Europe/Prague"
+    checkout_buffer_minutes: 60
+    expiration_action: 0 # 0=deactivate, 1=delete
+    loxone:
+      base_url: "https://dns.loxonecloud.com/504F94D0D93F"
+      username: "plusconnect"
+      password: "plusconnect11"
+    previo:
+      xml:
+        base_url: "https://xml.previo.app"
+        username: "apizamky_loxcon@moravsky-grunt.cz"
+        password: "30ziI1iaw0Bm"
+      rest:
+        base_url: "https://rest.previo.app"
+        token: "previo-rest-token"
+    room_group_mapping:
+      K1: "<uuid-K1>"
+      K2: "<uuid-K2>"
+      K3: "<uuid-K3>"

@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+requests
+mysql-connector-python
+PyYAML
+pytz
