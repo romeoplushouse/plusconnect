@@ -77,13 +77,15 @@ class PrevioXmlClient:
         try:
             root = ElementTree.fromstring(content)
         except ElementTree.ParseError as exc:
+            snippet = content[:200].replace("\n", " ")
             LOG.error(
-                "Failed to parse Previo XML response (status %s, content-type %s): %s",
+                "Failed to parse Previo XML response (status %s, content-type %s): %s | snippet=%s",
                 response.status_code,
                 response.headers.get("Content-Type"),
                 exc,
+                snippet,
             )
-            raise ValueError(f"Invalid XML from Previo: {exc}") from exc
+            raise ValueError(f"Invalid XML from Previo: {exc}. Snippet: {snippet}") from exc
         reservations: List[Dict[str, Any]] = []
         for res_el in root.findall(".//reservation"):
             res_data = {child.tag: (child.text or "").strip() for child in res_el}
