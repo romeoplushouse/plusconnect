@@ -44,6 +44,7 @@ class SyncService:
         self.checkout_buffer_minutes = checkout_buffer_minutes
         self.expiration_action = expiration_action
         self.room_group_mapping = room_group_mapping
+        self._groups_cache: Optional[Dict[str, str]] = None
 
     def sync(self, hotel_id: str, overlap_minutes: int = 3) -> None:
         last_synced_at = self.state_store.get_last_synced_at(hotel_id)
@@ -81,7 +82,9 @@ class SyncService:
 
         room_name = self._pick(raw, ["room_name", "room", "roomName", "roomCode", "unitName"], "")
         status = self._pick(raw, ["status", "state", "reservation_status"], default="confirmed")
-        pin = raw.get("pin") or self.previo_rest.get_pin(reservation_id)
+        pin = raw.get("pin")
+        if not pin and status.lower() != "storno":
+            pin = self.previo_rest.get_pin(reservation_id)
 
         return Reservation(
             reservation_id=str(reservation_id),
@@ -156,11 +159,14 @@ class SyncService:
 
     def _resolve_groups(self, room_name: str):
         if self.room_group_mapping:
-            return [self.room_group_mapping.get(room_name)]
+            group_uuid = self.room_group_mapping.get(room_name)
+            return [group_uuid] if group_uuid else []
+
         # Fallback: fetch once and cache from Loxone group list.
-        groups = self.loxone.get_group_list()
-        if room_name in groups:
-            return [groups[room_name]]
+        if self._groups_cache is None:
+            self._groups_cache = self.loxone.get_group_list()
+        if room_name in self._groups_cache:
+            return [self._groups_cache[room_name]]
         return []
 
     def _set_access_code(self, user_uuid: Optional[str], reservation: Reservation) -> None:
