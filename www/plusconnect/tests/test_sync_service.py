@@ -84,6 +84,20 @@ class FakeLoxone(LoxoneClient):
 
 
 class SyncServiceTests(unittest.TestCase):
+    def test_xml_parse_error_raises_clear_message(self):
+        # Response body that is not XML should raise ValueError with context.
+        import requests
+
+        resp = requests.Response()
+        resp.status_code = 200
+        resp._content = b"Auth error"
+        resp.headers["Content-Type"] = "text/plain"
+        resp.encoding = "utf-8"
+
+        client = PrevioXmlClient(base_url="http://example.com", username="u", password="p")
+        with self.assertRaisesRegex(ValueError, "Unexpected response format"):
+            client._parse_reservations_response(resp)
+
     def test_sync_fetches_pin_and_sets_access_code(self):
         reservations = [
             {

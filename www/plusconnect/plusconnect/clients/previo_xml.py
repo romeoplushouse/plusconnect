@@ -1,7 +1,10 @@
+import logging
 from typing import Any, Dict, List, Optional
 from xml.etree import ElementTree
 
 import requests
+
+LOG = logging.getLogger(__name__)
 
 
 class PrevioXmlClient:
@@ -64,7 +67,23 @@ class PrevioXmlClient:
                 raw_reservations = list(raw_reservations.values())
             return [r for r in (self._normalize_reservation(item) for item in raw_reservations) if r]
 
-        root = ElementTree.fromstring(content)
+        if not content.lstrip().startswith("<"):
+            snippet = content[:200].replace("\n", " ")
+            raise ValueError(
+                f"Unexpected response format (status {response.status_code}, content-type "
+                f"{response.headers.get('Content-Type')}): {snippet}"
+            )
+
+        try:
+            root = ElementTree.fromstring(content)
+        except ElementTree.ParseError as exc:
+            LOG.error(
+                "Failed to parse Previo XML response (status %s, content-type %s): %s",
+                response.status_code,
+                response.headers.get("Content-Type"),
+                exc,
+            )
+            raise ValueError(f"Invalid XML from Previo: {exc}") from exc
         reservations: List[Dict[str, Any]] = []
         for res_el in root.findall(".//reservation"):
             res_data = {child.tag: (child.text or "").strip() for child in res_el}
