@@ -111,6 +111,46 @@ class SyncServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid XML from Previo"):
             client._parse_reservations_response(resp)
 
+    def test_previor_rest_pin_parses_keys_payload(self):
+        import requests
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+                self.status_code = 200
+
+            def json(self):
+                return self._payload
+
+            def raise_for_status(self):
+                return None
+
+        # Mock requests.get
+        calls = {}
+
+        def fake_get(url, params=None, headers=None, auth=None, timeout=None):
+            calls["url"] = url
+            calls["params"] = params
+            calls["headers"] = headers
+            calls["auth"] = auth
+            return FakeResponse({"keys": [{"key": "654321"}]})
+
+        original_get = requests.get
+        requests.get = fake_get
+        try:
+            client = PrevioRestClient(
+                base_url="https://rest.previo.app",
+                username="user",
+                password="pass",
+                hotel_id="747998",
+            )
+            pin = client.get_pin("abc123")
+            self.assertEqual(pin, "654321")
+            self.assertIn("X-Previo-Hotel-ID", calls["headers"])
+            self.assertEqual(calls["params"]["reservationRoomId"], "abc123")
+        finally:
+            requests.get = original_get
+
     def test_sync_fetches_pin_and_sets_access_code(self):
         reservations = [
             {

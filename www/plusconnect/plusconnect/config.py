@@ -23,7 +23,9 @@ class PrevioXmlConfig:
 @dataclass
 class PrevioRestConfig:
     base_url: str
-    token: str
+    token: str = ""
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 @dataclass

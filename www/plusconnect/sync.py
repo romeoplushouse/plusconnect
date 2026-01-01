@@ -61,6 +61,8 @@ def main():
             previo_rest = PrevioRestClient(
                 base_url=hotel.previo_rest.base_url,
                 token=hotel.previo_rest.token,
+                username=hotel.previo_rest.username,
+                password=hotel.previo_rest.password,
                 hotel_id=hotel.previo_hotel_id,
             )
             sync_service = SyncService(
