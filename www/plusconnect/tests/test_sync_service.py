@@ -98,6 +98,19 @@ class SyncServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unexpected response format"):
             client._parse_reservations_response(resp)
 
+    def test_invalid_xml_raises_value_error_with_snippet(self):
+        import requests
+
+        resp = requests.Response()
+        resp.status_code = 200
+        resp._content = b"<html><body>Unauthorized</body>"  # malformed XML to trigger parse error
+        resp.headers["Content-Type"] = "text/html"
+        resp.encoding = "utf-8"
+
+        client = PrevioXmlClient(base_url="http://example.com", username="u", password="p")
+        with self.assertRaisesRegex(ValueError, "Invalid XML from Previo"):
+            client._parse_reservations_response(resp)
+
     def test_sync_fetches_pin_and_sets_access_code(self):
         reservations = [
             {

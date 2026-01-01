@@ -60,18 +60,27 @@ class PrevioXmlClient:
         if not content:
             return []
 
-        if "json" in response.headers.get("Content-Type", "") or content.startswith("{"):
+        content_type = response.headers.get("Content-Type", "")
+
+        if "json" in content_type or content.startswith("{"):
             data = response.json()
             raw_reservations = data.get("reservations") or data.get("Reservation") or data.get("data") or []
             if isinstance(raw_reservations, dict):
                 raw_reservations = list(raw_reservations.values())
             return [r for r in (self._normalize_reservation(item) for item in raw_reservations) if r]
 
+        if "xml" not in content_type.lower() and not content.lstrip().startswith("<"):
+            snippet = content[:200].replace("\n", " ")
+            raise ValueError(
+                f"Unexpected response format (status {response.status_code}, content-type "
+                f"{content_type}): {snippet}"
+            )
+
         if not content.lstrip().startswith("<"):
             snippet = content[:200].replace("\n", " ")
             raise ValueError(
                 f"Unexpected response format (status {response.status_code}, content-type "
-                f"{response.headers.get('Content-Type')}): {snippet}"
+                f"{content_type}): {snippet}"
             )
 
         try:
@@ -81,7 +90,7 @@ class PrevioXmlClient:
             LOG.error(
                 "Failed to parse Previo XML response (status %s, content-type %s): %s | snippet=%s",
                 response.status_code,
-                response.headers.get("Content-Type"),
+                content_type,
                 exc,
                 snippet,
             )
