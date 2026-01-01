@@ -15,7 +15,9 @@ hotels:
         password: "30ziI1iaw0Bm"
       rest:
         base_url: "https://rest.previo.app"
-        token: "previo-rest-token"
+        token: ""            # optional if using bearer token
+        username: "rest-username"  # Basic auth per Previo REST docs
+        password: "rest-password"
     room_group_mapping:
       K1: "<uuid-K1>"
       K2: "<uuid-K2>"

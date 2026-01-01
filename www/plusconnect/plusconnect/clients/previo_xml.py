@@ -1,6 +1,10 @@
-from typing import Any, Dict, List
+import logging
+from typing import Any, Dict, List, Optional
+from xml.etree import ElementTree
 
 import requests
+
+LOG = logging.getLogger(__name__)
 
 
 class PrevioXmlClient:
@@ -22,9 +26,155 @@ class PrevioXmlClient:
         Call Hotel.searchReservations and return parsed reservations.
         `modified_from` / `modified_to` should be ISO strings expected by Previo.
         """
-        # TODO: Implement XML payload/response parsing according to Previo docs.
-        raise NotImplementedError
+        payload = self._build_search_request(modified_from, modified_to)
+        resp = requests.post(
+            f"{self.base_url}/x1/hotel/searchReservations",
+            data=payload,
+            headers={"Content-Type": "text/xml"},
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        return self._parse_reservations_response(resp)
 
     def get_room_kinds(self) -> Dict[str, Any]:
-        # TODO: Implement Hotel.getRoomKinds if needed for metadata.
-        raise NotImplementedError
+        resp = requests.post(
+            f"{self.base_url}/Hotel.getRoomKinds",
+            data=self._with_defaults({}),
+            auth=self.auth,
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        return self._parse_room_kinds_response(resp)
+
+    def _with_defaults(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        data = {
+            "login": self.auth[0],
+            "password": self.auth[1],
+            "hotelId": self.hotel_id,
+            **{k: v for k, v in payload.items() if v is not None},
+        }
+        return data
+
+    def _build_search_request(self, modified_from: str, modified_to: str) -> str:
+        """
+        Build XML payload for Hotel.searchReservations with termType=modified.
+        """
+        root = ElementTree.Element("request")
+        ElementTree.SubElement(root, "login").text = self.auth[0]
+        ElementTree.SubElement(root, "password").text = self.auth[1]
+        ElementTree.SubElement(root, "hotId").text = str(self.hotel_id)
+        term_el = ElementTree.SubElement(root, "term")
+        ElementTree.SubElement(term_el, "from").text = modified_from
+        ElementTree.SubElement(term_el, "to").text = modified_to
+        ElementTree.SubElement(root, "termType").text = "modified"
+        return ElementTree.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
+
+    def _parse_reservations_response(self, response: requests.Response) -> List[Dict[str, Any]]:
+        content = response.text.strip()
+        if not content:
+            return []
+
+        content_type = response.headers.get("Content-Type", "")
+
+        if "json" in content_type or content.startswith("{"):
+            data = response.json()
+            raw_reservations = data.get("reservations") or data.get("Reservation") or data.get("data") or []
+            if isinstance(raw_reservations, dict):
+                raw_reservations = list(raw_reservations.values())
+            return [r for r in (self._normalize_reservation(item) for item in raw_reservations) if r]
+
+        if "xml" not in content_type.lower() and not content.lstrip().startswith("<"):
+            snippet = content[:200].replace("\n", " ")
+            raise ValueError(
+                f"Unexpected response format (status {response.status_code}, content-type "
+                f"{content_type}): {snippet}"
+            )
+
+        if not content.lstrip().startswith("<"):
+            snippet = content[:200].replace("\n", " ")
+            raise ValueError(
+                f"Unexpected response format (status {response.status_code}, content-type "
+                f"{content_type}): {snippet}"
+            )
+
+        try:
+            root = ElementTree.fromstring(content)
+        except ElementTree.ParseError as exc:
+            snippet = content[:200].replace("\n", " ")
+            LOG.error(
+                "Failed to parse Previo XML response (status %s, content-type %s): %s | snippet=%s",
+                response.status_code,
+                content_type,
+                exc,
+                snippet,
+            )
+            raise ValueError(f"Invalid XML from Previo: {exc}. Snippet: {snippet}") from exc
+        reservations: List[Dict[str, Any]] = []
+        for res_el in root.findall(".//reservation"):
+            res_data = {child.tag: (child.text or "").strip() for child in res_el}
+            normalized = self._normalize_reservation(res_data)
+            if normalized:
+                reservations.append(normalized)
+        return reservations
+
+    def _normalize_reservation(self, raw: Any) -> Optional[Dict[str, Any]]:
+        data: Dict[str, Any] = {}
+        if isinstance(raw, dict):
+            data.update(raw)
+
+        # Pull common nested structures up to the top-level.
+        if isinstance(data.get("room"), dict):
+            data.setdefault("room_name", data["room"].get("name") or data["room"].get("code"))
+        if isinstance(data.get("accommodationUnit"), dict):
+            unit = data["accommodationUnit"]
+            data.setdefault("room_name", unit.get("name") or unit.get("code"))
+        if isinstance(data.get("object"), dict):
+            data.setdefault("room_name", data["object"].get("name"))
+
+        # Map term/from|to fields used by Previo searchReservations XML response.
+        if isinstance(data.get("term"), dict):
+            term = data["term"]
+            data.setdefault("check_in", term.get("from"))
+            data.setdefault("check_out", term.get("to"))
+
+        def pick(keys, default=None):
+            for key in keys:
+                if key in data and data[key] not in (None, ""):
+                    return data[key]
+            return default
+
+        reservation_id = pick(["reservation_id", "reservationId", "id", "resId", "comId"])
+        if not reservation_id:
+            return None
+
+        return {
+            "reservation_id": str(reservation_id),
+            "room_name": pick(["room_name", "roomName", "room", "roomCode", "unitName", "objectName"], ""),
+            "check_in": pick(["check_in", "checkIn", "arrival", "date_from", "from", "start"]),
+            "check_out": pick(["check_out", "checkOut", "departure", "date_to", "to", "end"]),
+            "status": pick(["status", "state", "reservation_status", "statusId"], ""),
+            "pin": pick(["pin", "access_code", "code"]),
+        }
+
+    def _parse_room_kinds_response(self, response: requests.Response) -> Dict[str, Any]:
+        content = response.text.strip()
+        if not content:
+            return {}
+
+        if "json" in response.headers.get("Content-Type", "") or content.startswith("{"):
+            data = response.json()
+            return data.get("roomKinds") or data.get("data") or {}
+
+        root = ElementTree.fromstring(content)
+        result: Dict[str, Any] = {}
+        for kind in root.findall(".//roomKind"):
+            uuid = None
+            name = None
+            for child in kind:
+                if child.tag in ("uuid", "id") and child.text:
+                    uuid = child.text.strip()
+                if child.tag == "name" and child.text:
+                    name = child.text.strip()
+            if uuid and name:
+                result[uuid] = name
+        return result
