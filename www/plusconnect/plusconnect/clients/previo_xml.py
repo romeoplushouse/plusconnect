@@ -26,11 +26,11 @@ class PrevioXmlClient:
         Call Hotel.searchReservations and return parsed reservations.
         `modified_from` / `modified_to` should be ISO strings expected by Previo.
         """
-        payload = self._with_defaults({"modifiedFrom": modified_from, "modifiedTo": modified_to})
+        payload = self._build_search_request(modified_from, modified_to)
         resp = requests.post(
-            f"{self.base_url}/Hotel.searchReservations",
+            f"{self.base_url}/x1/hotel/searchReservations",
             data=payload,
-            auth=self.auth,
+            headers={"Content-Type": "text/xml"},
             timeout=self.timeout,
         )
         resp.raise_for_status()
@@ -54,6 +54,20 @@ class PrevioXmlClient:
             **{k: v for k, v in payload.items() if v is not None},
         }
         return data
+
+    def _build_search_request(self, modified_from: str, modified_to: str) -> str:
+        """
+        Build XML payload for Hotel.searchReservations with termType=modified.
+        """
+        root = ElementTree.Element("request")
+        ElementTree.SubElement(root, "login").text = self.auth[0]
+        ElementTree.SubElement(root, "password").text = self.auth[1]
+        ElementTree.SubElement(root, "hotId").text = str(self.hotel_id)
+        term_el = ElementTree.SubElement(root, "term")
+        ElementTree.SubElement(term_el, "from").text = modified_from
+        ElementTree.SubElement(term_el, "to").text = modified_to
+        ElementTree.SubElement(root, "termType").text = "modified"
+        return ElementTree.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
     def _parse_reservations_response(self, response: requests.Response) -> List[Dict[str, Any]]:
         content = response.text.strip()
@@ -114,6 +128,14 @@ class PrevioXmlClient:
         if isinstance(data.get("accommodationUnit"), dict):
             unit = data["accommodationUnit"]
             data.setdefault("room_name", unit.get("name") or unit.get("code"))
+        if isinstance(data.get("object"), dict):
+            data.setdefault("room_name", data["object"].get("name"))
+
+        # Map term/from|to fields used by Previo searchReservations XML response.
+        if isinstance(data.get("term"), dict):
+            term = data["term"]
+            data.setdefault("check_in", term.get("from"))
+            data.setdefault("check_out", term.get("to"))
 
         def pick(keys, default=None):
             for key in keys:
@@ -121,16 +143,16 @@ class PrevioXmlClient:
                     return data[key]
             return default
 
-        reservation_id = pick(["reservation_id", "reservationId", "id", "resId"])
+        reservation_id = pick(["reservation_id", "reservationId", "id", "resId", "comId"])
         if not reservation_id:
             return None
 
         return {
             "reservation_id": str(reservation_id),
-            "room_name": pick(["room_name", "roomName", "room", "roomCode", "unitName"], ""),
+            "room_name": pick(["room_name", "roomName", "room", "roomCode", "unitName", "objectName"], ""),
             "check_in": pick(["check_in", "checkIn", "arrival", "date_from", "from", "start"]),
             "check_out": pick(["check_out", "checkOut", "departure", "date_to", "to", "end"]),
-            "status": pick(["status", "state", "reservation_status"], ""),
+            "status": pick(["status", "state", "reservation_status", "statusId"], ""),
             "pin": pick(["pin", "access_code", "code"]),
         }
 
